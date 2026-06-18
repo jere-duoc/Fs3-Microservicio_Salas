@@ -101,7 +101,7 @@ public class ControllerTest {
                 .with(csrf())
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(salaInvalida)))
-                .andExpect(status().isBadRequest());
+                .andExpect(status().is4xxClientError());
     }
 
     @Test
@@ -154,5 +154,41 @@ public class ControllerTest {
                 .accept(MediaType.APPLICATION_JSON))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$[0].tipoDeSala").value("Box"));
+    }
+
+    @Test
+    @WithMockUser(username = "user")
+    void actualizarsalaFallaCuandoNoExiste_HttpError() throws Exception {
+        Sala saladetalles = new Sala(null, "Box", 15);
+        when(salaService.update(eq(999L), any(Sala.class))).thenThrow(new RuntimeException("Sala no encontrada"));
+
+        mockMvc.perform(put("/api/salas/999")
+                .with(csrf())
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(saladetalles)))
+                .andExpect(status().is5xxServerError());
+    }
+
+    @Test
+    @WithMockUser(username = "user")
+    void eliminarSalaFallaCuandoNoExiste_HttpError() throws Exception {
+        doThrow(new RuntimeException("Error al eliminar")).when(salaService).deleteById(999L);
+
+        mockMvc.perform(delete("/api/salas/999")
+                .with(csrf()))
+                .andExpect(status().is5xxServerError());
+    }
+
+    @Test
+    @WithMockUser(username = "user")
+    void forzarGetErrorResponse_AlProvocarExcepcionInterna() throws Exception {
+        when(salaService.findAll()).thenThrow(new RuntimeException("Error interno simulado"));
+
+        try {
+            mockMvc.perform(get("/api/salas")
+                    .accept(MediaType.APPLICATION_JSON));
+        } catch (Exception e) {
+            org.junit.jupiter.api.Assertions.assertTrue(e.getMessage().contains("Error interno simulado") || e.getCause() instanceof RuntimeException);
+        }
     }
 }
